@@ -1,3 +1,5 @@
+'use strict';
+
 const express = require('express');
 const app = express();
 const http = require('http');
@@ -7,10 +9,32 @@ const server = http.createServer(app);
 const io = require('socket.io')(http);
 const staffRoom = 'staff';
 const { v4: uuidv4 } = require('uuid');
+const mongoose = require('mongoose');
+const router = require('./router');
+
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/doctors';
+
+require('dotenv').config();
+app.use(cors());
+app.use(express.json());
 
 io.listen(server);
+mongoose
+  .connect(MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    useFindAndModify: false,
+  })
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`Listening on PORT ${PORT}`);
+    });
+  })
+  .catch((e) => {
+    console.error('CONNECTION ERROR', e.message);
+  });
 
-app.use(cors());
+
 const queue = {
   consultation: [],
   doctors: [],
@@ -19,19 +43,21 @@ const queue = {
 //   res.send('Hello World');
 // });
 
+// app.use('/admin', router);
+
 io.on('connection', (socket) => {
-  // console.log('clie.nt connected', socket.id);
-  //2a
+
   socket.on('join', (payload) => {
-    // socket.join will put the socket in a private room
-    const doctor = { name: payload.name, id: socket.id };
+
+    const doctor = { docName: payload.docName, id: socket.id };
+    
     queue.doctors.push(doctor);
     socket.join(staffRoom);
     socket.to(staffRoom).emit('onlineStaff', doctor);
   });
 
   socket.on('createConsultation', (payload) => {
-    // 2
+
     const consultationData={...payload, id: uuidv4(), socketId: socket.id};
     queue.consultation.push(consultationData);
     socket
@@ -40,15 +66,16 @@ io.on('connection', (socket) => {
   });
 
   socket.on('diagnose', (payload) => {
-    // when a TA claim the ticket we need to notify the student
+
     console.log(payload);
-    console.log(queue.consultation);
+    // console.log(queue.consultation);
     socket.to(payload.patientId).emit('diagnosed', { docName: payload.docName, diagnosis: payload.diagnosis, prescription: payload.prescription });
-    queue.consultation.filter((cons) => cons.id !== payload.id);
+    queue.consultation=queue.consultation.filter((cons) => cons.id !== payload.id);
+    socket.to(staffRoom).emit('closed', payload.id);
   });
   socket.on('getAll', () => {
     queue.doctors.forEach((doc) => {
-      socket.emit('onlineStaff', { docName: doc.name, id: doc.id });
+      socket.emit('onlineStaff', { docName: doc.docName, id: doc.id });
     });
     queue.consultation.forEach((cons) => {
       socket.emit('newConsultation', cons);
@@ -56,10 +83,7 @@ io.on('connection', (socket) => {
   })
   socket.on('disconnect', () => {
     socket.to(staffRoom).emit('offlineStaff', { id: socket.id });
-    queue.doctors.filter((doc) => doc.id !== socket.id);
+    queue.doctors=queue.doctors.filter((doc) => doc.id !== socket.id);
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Listening on PORT ${PORT}`);
-});
