@@ -4,8 +4,7 @@ const mongoose = require('mongoose');
 
 
 const docSchema = mongoose.Schema({
-  docName:{type:String},
-  id:{type:String}
+  docName:{type:String}
 })
 
 const docModel = mongoose.model('doctor',docSchema)

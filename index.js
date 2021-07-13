@@ -10,7 +10,10 @@ const io = require('socket.io')(http);
 const staffRoom = 'staff';
 const { v4: uuidv4 } = require('uuid');
 const mongoose = require('mongoose');
-const router = require('./router');
+// const router = require('./router');
+const docModel = require('./docModel');
+const DataCollection = require('./dataClass');
+const doct = new DataCollection(docModel);
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/doctors';
 
@@ -39,21 +42,30 @@ const queue = {
   consultation: [],
   doctors: [],
 }
-// app.get('/hi', (req, res) => {
-//   res.send('Hello World');
-// });
 
-// app.use('/admin', router);
 
 io.on('connection', (socket) => {
 
-  socket.on('join', (payload) => {
+  socket.on('join', async(payload) => {
+    
+    // doct.create({
+    //   docName: 'Mahmoud'
+    // })
 
     const doctor = { docName: payload.docName, id: socket.id };
     
-    queue.doctors.push(doctor);
-    socket.join(staffRoom);
-    socket.to(staffRoom).emit('onlineStaff', doctor);
+    const readData = await doct.read(payload.docName);
+    console.log(readData);
+    if(readData.length > 0){
+      
+      queue.doctors.push(doctor);
+      socket.join(staffRoom);
+      socket.to(staffRoom).emit('onlineStaff', doctor);
+    }else {
+      console.log('hello');
+      io.to(socket.id).emit('notFound', {Error: 'Username Not Found!'});
+    }
+
   });
 
   socket.on('createConsultation', (payload) => {
